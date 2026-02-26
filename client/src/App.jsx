@@ -49,13 +49,16 @@ function App() {
                             {/* Sci-Fi Header */}
                             <header className="relative z-20 bg-white/60 dark:bg-black/20 backdrop-blur-md border-b border-gray-200 dark:border-white/10 shadow-sm top-0 w-full transition-colors duration-300">
                                 <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-                                    <motion.h1
+                                    <motion.div
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
-                                        className="text-2xl font-bold text-blue-600 dark:text-white tracking-tight drop-shadow-sm dark:drop-shadow-md"
+                                        className="flex items-center gap-3"
                                     >
-                                        TravelEase
-                                    </motion.h1>
+                                        <img src="/logo.png" alt="TravelEase Logo" className="w-8 h-8 rounded-xl object-cover shadow-sm" />
+                                        <h1 className="text-2xl font-bold text-blue-600 dark:text-white tracking-tight drop-shadow-sm dark:drop-shadow-md">
+                                            TravelEase
+                                        </h1>
+                                    </motion.div>
                                     <nav className="space-x-6 flex items-center font-medium text-sm text-gray-700 dark:text-gray-300">
                                         <Link to="/" className="hover:text-blue-600 dark:hover:text-white transition-colors">{t('home')}</Link>
                                         <Link to="/dashboard" className="hover:text-blue-600 dark:hover:text-white transition-colors">{t('emergency')}</Link>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Navigation, Search, AlertTriangle, Utensils, Hotel, Fuel, ShoppingBag, Bell, Shield, Sun, Moon, CheckCircle, Home } from 'lucide-react';
 import { onEmergencyAlert, onLocationUpdate, offEmergencyEvents } from '../services/socket';
@@ -9,13 +9,45 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import ProfileDropdown from '../components/ProfileDropdown';
 import { useTranslation } from 'react-i18next';
+import { GoogleMap, useJsApiLoader, DirectionsRenderer, Marker } from '@react-google-maps/api';
 
+const libraries = ['places'];
 const Dashboard = () => {
     const { t } = useTranslation();
     const { theme, toggleTheme } = useTheme();
     const { user, logout } = useAuth();
     const [activeTab, setActiveTab] = useState('route');
     const [activeEmergencies, setActiveEmergencies] = useState([]);
+    const [source, setSource] = useState('');
+    const [destination, setDestination] = useState('');
+    const [directionsResponse, setDirectionsResponse] = useState(null);
+    const [map, setMap] = useState(null);
+
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
+    const { isLoaded } = useJsApiLoader({
+        id: 'google-map-script',
+        googleMapsApiKey: apiKey || "UNSET",
+        libraries,
+    });
+
+    const calculateRoute = async () => {
+        if (source === '' || destination === '') return;
+        try {
+            // eslint-disable-next-line no-undef
+            const directionsService = new google.maps.DirectionsService();
+            const results = await directionsService.route({
+                origin: source,
+                destination: destination,
+                // eslint-disable-next-line no-undef
+                travelMode: google.maps.TravelMode.DRIVING,
+            });
+            setDirectionsResponse(results);
+        } catch (error) {
+            console.error("Routing error", error);
+            toast.error("Failed to calculate route.");
+        }
+    };
 
     useEffect(() => {
         onEmergencyAlert((data) => {
@@ -101,6 +133,8 @@ const Dashboard = () => {
                                             <MapPin className="absolute left-3 top-3 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors" />
                                             <input
                                                 type="text"
+                                                value={source}
+                                                onChange={(e) => setSource(e.target.value)}
                                                 placeholder="Enter location"
                                                 className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-dark-base border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none dark:text-white transition-all shadow-inner"
                                             />
@@ -112,6 +146,8 @@ const Dashboard = () => {
                                             <Navigation className="absolute left-3 top-3 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors" />
                                             <input
                                                 type="text"
+                                                value={destination}
+                                                onChange={(e) => setDestination(e.target.value)}
                                                 placeholder="Where to?"
                                                 className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-dark-base border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none dark:text-white transition-all shadow-inner"
                                             />
@@ -120,9 +156,10 @@ const Dashboard = () => {
                                     <motion.button
                                         whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.98 }}
+                                        onClick={calculateRoute}
                                         className="w-full bg-primary text-white py-3 rounded-xl font-bold shadow-lg shadow-primary/30 hover:bg-blue-600 transition-all flex items-center justify-center gap-2"
                                     >
-                                        <Search className="w-4 h-4" /> {t('find_services')}
+                                        <Search className="w-4 h-4" /> {t('plan_route')}
                                     </motion.button>
                                 </div>
 
@@ -251,19 +288,41 @@ const Dashboard = () => {
 
             {/* Main Map View Placeholder */}
             <div className="flex-1 relative bg-gray-200 dark:bg-dark-surface/50 overflow-hidden">
-                {/* Map Grid Pattern Overlay */}
-                <div className="absolute inset-0 opacity-10 dark:opacity-5" style={{ backgroundImage: 'radial-gradient(#444 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
-
-                <div className="absolute inset-0 flex items-center justify-center flex-col text-gray-500 dark:text-gray-400 z-10">
-                    <motion.div
-                        animate={{ y: [0, -10, 0] }}
-                        transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                {!isLoaded ? (
+                    <div className="absolute inset-0 flex items-center justify-center flex-col text-gray-500 dark:text-gray-400 z-10">
+                        <motion.div animate={{ y: [0, -10, 0] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}>
+                            <Navigation className="w-16 h-16 mb-4 text-primary opacity-50" />
+                        </motion.div>
+                        <p className="text-xl font-bold text-gray-700 dark:text-gray-300">Loading Map...</p>
+                    </div>
+                ) : (
+                    <GoogleMap
+                        mapContainerStyle={{ width: '100%', height: '100%' }}
+                        center={{ lat: 20.5937, lng: 78.9629 }}
+                        zoom={5}
+                        options={{
+                            zoomControl: true,
+                            streetViewControl: false,
+                            mapTypeControl: false,
+                            fullscreenControl: false,
+                        }}
+                        onLoad={map => setMap(map)}
                     >
-                        <Navigation className="w-16 h-16 mb-4 text-primary opacity-50" />
-                    </motion.div>
-                    <p className="text-xl font-bold text-gray-700 dark:text-gray-300">Map Integration Offline</p>
-                    <p className="text-sm mt-2 max-w-sm text-center">Interactive route visualization and live service markers will render here when connected.</p>
-                </div>
+                        {directionsResponse && (
+                            <DirectionsRenderer directions={directionsResponse} />
+                        )}
+                        {activeEmergencies.map((alert, index) => (
+                            <Marker
+                                key={alert.id || index}
+                                position={{ lat: alert.location?.lat || 20.5937, lng: alert.location?.lng || 78.9629 }} // Fallback coordinates if location not sent
+                                icon={{
+                                    url: "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='red' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/%3E%3Cline x1='12' y1='9' x2='12' y2='13'/%3E%3Cline x1='12' y1='17' x2='12.01' y2='17'/%3E%3C/svg%3E",
+                                    scaledSize: new window.google.maps.Size(32, 32),
+                                }}
+                            />
+                        ))}
+                    </GoogleMap>
+                )}
 
                 {/* Search Bar Overlay on Map */}
                 <div className="absolute top-6 left-6 right-32 z-20 pointer-events-none">
